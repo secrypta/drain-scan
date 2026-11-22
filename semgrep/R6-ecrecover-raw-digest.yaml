@@ -1,0 +1,33 @@
+rules:
+  - id: ecrecover-over-raw-opaque-digest
+    languages: [solidity]
+    severity: ERROR
+    message: >-
+      `ecrecover` authorizes a signer over a RAW keccak256(abi.encode(...)) digest that is
+      not built through an EIP-712 domain separator (no "\x19\x01" + DOMAIN_SEPARATOR
+      binding). This is a blind-sign verifier: the signed hash is opaque and
+      domain-unbound, so a signature phished over such a hash replays and can authorize a
+      drain the user never saw. Build the digest via EIP-712 typed data
+      (keccak256(abi.encodePacked("\x19\x01", DOMAIN_SEPARATOR, structHash))) so the
+      signature is domain-bound and decodable. (R6 - syntactic; the core R6 detector proves the digest's
+      provenance by dataflow.)
+    metadata:
+      drain-scan-rule: R6
+      vector: blind-eth-sign
+      engine: semgrep
+      confidence: MEDIUM
+      references:
+        - https://github.com/secrypta/wallet-harness
+    patterns:
+      # A digest built as a plain keccak256(abi.encode(...)) (NOT domain-separated) that is
+      # then fed to ecrecover in the same function.
+      - pattern-either:
+          - pattern: ecrecover(keccak256(abi.encode(...)), $V, $R, $S)
+          - patterns:
+              - pattern: |
+                  $H = keccak256(abi.encode(...));
+                  ...
+                  ecrecover($H, $V, $R, $S)
+      # If the recovered digest is EIP-712 domain-separated (built with the "\x19\x01"
+      # prefix), it is clear-signing, not blind-signing - do not flag.
+      - pattern-not: ecrecover(keccak256(abi.encodePacked("\x19\x01", ...)), $V, $R, $S)

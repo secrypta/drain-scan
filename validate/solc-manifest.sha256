@@ -1,0 +1,14 @@
+# drain-scan solc toolchain manifest - trusted sha256 of the official solc linux-amd64 binaries.
+#
+# verify-toolchain.sh checks every solc artifact is (a) a real ELF (not a solc-select wrapper /
+# symlink - the 2026-11-20 fork-bomb) and (b) sha256-matches a value here, before any validate run.
+# Values are the OFFICIAL sha256 from https://binaries.soliditylang.org/linux-amd64/list.json
+# (the `builds[].sha256` field, 0x-stripped), cross-checked against the fetched list.json on
+# 2026-11-21 and against the binaries provisioned into the shared cache. drain-scan supports
+# Solidity >=0.8; these are the versions the corpus pins (Permit2 = 0.8.17, Hedgey real = 0.8.19,
+# default = 0.8.24).
+#
+# Format: <version> <sha256>   (comments start with #)
+0.8.17 99f2070b776e9714f1f76c43c229cf99b8978a92938ee8d2364c6de11c1a03d4
+0.8.19 7a5c1d3dc9a8eba62bb2ec37192c9178ae5fe8a54a56e5573fd3c9c17cd9eb48
+0.8.24 fb03a29a517452b9f12bcf459ef37d0a543765bb3bbc911e70a87d6a37c30d5f

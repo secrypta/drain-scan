@@ -1,0 +1,47 @@
+# drain-scan - example DIRECTORY scan: honest coverage reporting
+#
+# Target : the wallet-harness test/ dir - Foundry test files (*.t.sol) that import
+#          forge-std and do NOT compile standalone (no framework remappings here).
+# Why    : this demonstrates the directory-scan coverage report. Files that cannot be
+#          built standalone are listed as "skipped" (a coverage gap) INSTEAD of being
+#          silently dropped - so a CLEAN verdict is never a silent "nothing scanned".
+# Command: ./scan test
+#          (run from the wallet-harness root; default --allow-paths is the scanned dir.
+#           For a real project, pass --allow-paths <project-root> so imports resolve.)
+# Engine : drain-scan analysis core (solc AST, no Slither)
+# solc   : 0.8.24+commit.e11b9ed9
+# drain-scan: e4d1355   wallet-harness: 24ded72   date: 2026-11-21
+# Exit   : 0  (no findings; skipped files are a coverage note, not a failure - exit tracks findings)
+# ---------------------------- verbatim output ----------------------------
+RATING: CLEAN   (no drain surface flagged - not a general safety guarantee)
+
+drain-scan - 0 finding(s) in test
+
+  no drain surfaces flagged by the current rule set.
+  (note: a clean scan is not a security guarantee - see RULES.md scope.)
+
+skipped: 120 file(s) did not compile standalone and were NOT scanned
+  (a coverage gap, not a clean result - these files were not analyzed):
+  - test/AddressPoisoning.t.sol  (solc rc=1: Error: Source "forge-std/Test.sol" not found: File not found. Searched the following locations: "".)
+  - test/AnyswapIncident.t.sol  (solc rc=1: Error: Source "forge-std/Test.sol" not found: File not found. Searched the following locations: "".)
+  - test/ApproveDrainer.t.sol  (solc rc=1: Error: Source "forge-std/Test.sol" not found: File not found. Searched the following locations: "".)
+  - test/AudiusGovernanceIncident.t.sol  (solc rc=1: Error: Source "forge-std/Test.sol" not found: File not found. Searched the following locations: "".)
+  - test/BadgerIncident.t.sol  (solc rc=1: Error: Source "forge-std/Test.sol" not found: File not found. Searched the following locations: "".)
+  - test/BeanstalkIncident.t.sol  (solc rc=1: Error: Source "forge-std/Test.sol" not found: File not found. Searched the following locations: "".)
+  - test/BebopJamSettlementIncident.t.sol  (solc rc=1: Error: Source "forge-std/Test.sol" not found: File not found. Searched the following locations: "".)
+  - test/Binance14DelegationIncident.t.sol  (solc rc=1: Error: Source "forge-std/Test.sol" not found: File not found. Searched the following locations: "".)
+  - test/BlindEthSign.t.sol  (solc rc=1: Error: Source "forge-std/Test.sol" not found: File not found. Searched the following locations: "".)
+  - test/BlindEthSignIncident.t.sol  (solc rc=1: Error: Source "forge-std/Test.sol" not found: File not found. Searched the following locations: "".)
+  - test/BybitBlindSignIncident.t.sol  (solc rc=1: Error: Source "forge-std/Test.sol" not found: File not found. Searched the following locations: "".)
+  - test/BybitIncident.t.sol  (solc rc=1: Error: Source "forge-std/Test.sol" not found: File not found. Searched the following locations: "".)
+  - test/Create2Metamorphic.t.sol  (solc rc=1: Error: Source "forge-std/Test.sol" not found: File not found. Searched the following locations: "".)
+  - test/Create2MetamorphicIncident.t.sol  (solc rc=1: Error: Source "forge-std/Test.sol" not found: File not found. Searched the following locations: "".)
+  - test/CrimeEnjoyorIncident.t.sol  (solc rc=1: Error: Source "forge-std/Test.sol" not found: File not found. Searched the following locations: "".)
+  - test/DelegatecallHijack.t.sol  (solc rc=1: Error: Source "forge-std/Test.sol" not found: File not found. Searched the following locations: "".)
+  - test/DexibleIncident.t.sol  (solc rc=1: Error: Source "forge-std/Test.sol" not found: File not found. Searched the following locations: "".)
+  - test/DrainerKitIncident.t.sol  (solc rc=1: Error: Source "forge-std/Test.sol" not found: File not found. Searched the following locations: "".)
+  - test/Eip7702Delegation.t.sol  (solc rc=1: Error: Source "forge-std/Test.sol" not found: File not found. Searched the following locations: "".)
+  - test/FakeAirdrop.t.sol  (solc rc=1: Error: Source "forge-std/Test.sol" not found: File not found. Searched the following locations: "".)
+  ... and 100 more
+  tip: pass --allow-paths <project-root> so imports resolve, or list all via --format json.
+[exit code: 0]

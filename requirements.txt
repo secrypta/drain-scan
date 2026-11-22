@@ -1,0 +1,11 @@
+# drain-scan toolchain (install into a venv; see validate/README.md).
+#   python3 -m venv .venv && . .venv/bin/activate && pip install -r requirements.txt
+#   solc-select install 0.8.24   # the solc most wallet-harness fixtures compile with
+#   solc-select install 0.8.17   # also needed: Uniswap Permit2 fixtures pin pragma 0.8.17
+#                                # (core/compile.py picks solc per-file by pragma)
+#
+# The analysis core runs our own pass over the solc AST (solc invoked as a subprocess), so
+# Slither / crytic-compile are NOT dependencies - deliberately: Slither is AGPL and this is an
+# MIT repo. Only the solc toolchain and Semgrep (syntactic subset) are needed.
+solc-select==1.2.0
+semgrep==1.185.0

@@ -1,0 +1,149 @@
+# drain-scan HOLDOUT validation anchors (independent split).
+# Same format as anchors.tsv: rule  detector_module  label(vuln|safe)  path  [contract]  note
+#
+# These anchor each rule to INDEPENDENT fixtures - held out from the dev anchors the rules
+# were written against - so the benchmark measures generalization, not memorization. The
+# source of truth is the drain-bench dataset manifest (wallet-harness bench/dataset/manifest.tsv),
+# split=holdout rows. Only PUBLIC wallet-harness paths go here.
+#
+# Coverage note: only rules whose detector is ON MAIN (R1/R2/R3/R5/R6) get rows here. The
+# holdout corpus also ships incident fixtures whose mechanism belongs to rules not yet merged
+# to main - delegatecall-hijack (parity) -> R7, malicious-calldata (squid) -> R8; those get
+# holdout rows when R7/R8 land. See the approve-drainer deferral note below.
+#
+# --- R1 unbounded-approve-to-arbitrary-spender ---
+R1	detectors/r1_unbounded_approve.py	safe	fixtures/approve-drainer/c-safe-impl/SoladyERC20Fixture.sol	-	real Solady ERC20 (MIT) bounded-approve accounting (holdout safe)
+#
+# --- R3 lingering-allowance (no reset after action) ---
+R3	detectors/r3_lingering_allowance.py	safe	fixtures/approve-drainer/c-safe-impl/SoladyERC20Fixture.sol	-	real Solady ERC20 (MIT) bounded-approve, no lingering surface (holdout safe)
+# NB: the approve-drainer holdout *vuln* incident (Pennysia Settlement, 2026-11-12) is an
+# arbitrary-callee/calldata drain (a victim's pre-existing approval is moved via an attacker-
+# chosen executeSwap route) - its mechanism is the R11 / arbitrary-callee class, NOT R3's
+# "approve + action + no reset-to-zero in one wallet". R3 correctly does not fire on it; it is a
+# Pennysia R11-class holdout, not an R3 anchor. (The earlier ParaSwap slot was removed - its
+# mechanism did not match approve-drainer; Pennysia is the real, verified replacement.)
+#
+# --- R5 auth-signature-missing-deadline/nonce/domain (replayable) ---
+R5	detectors/r5_signature_missing_binding.py	vuln	fixtures/permit-phishing/b-incident/LixirVaultTokenClone.sol	-	Lixir broken permit: ecrecover accepted, no owner/nonce/domain binding (holdout vuln)
+R5	detectors/r5_signature_missing_binding.py	safe	fixtures/permit-phishing/c-safe-impl/oz-permit-safe/OZERC20PermitFixture.sol	-	real OZ v5.1.0 ERC20Permit: EIP-712 domain + nonce + deadline (holdout safe)
+#
+# --- R6 ecrecover-over-raw-digest (blind eth_sign / ERC-1271) ---
+R6	detectors/r6_ecrecover_raw_digest.py	vuln	fixtures/permit-phishing/b-incident/LixirVaultTokenClone.sol	-	Lixir broken permit: ecrecover over a non-EIP-712 digest, result unchecked (holdout vuln)
+R6	detectors/r6_ecrecover_raw_digest.py	safe	fixtures/permit-phishing/c-safe-impl/oz-permit-safe/OZERC20PermitFixture.sol	-	real OZ v5.1.0 ERC20Permit: typed EIP-712 digest via ECDSA lib (holdout safe)
+R6	detectors/r6_ecrecover_raw_digest.py	safe	fixtures/signature-phishing/c-safe-impl/SoladyERC1271Fixture.sol	-	real Solady ERC1271 ERC-7739 nested EIP-712 (holdout safe)
+#
+# --- R7 controlled-delegatecall (delegatecall-hijack) ---
+# NB (R7 Parity - documented NON-FIT for the core R7 detector; Parity is wired under R12 below):
+#   fixtures/delegatecall-hijack/b-incident/ParityWalletClone.sol does NOT fire on the principled
+#   core R7. R7 flags a delegatecall whose DESTINATION is attacker-settable; Parity's proxy
+#   delegatecalls a FIXED (constructor-set immutable) library and forwards
+#   arbitrary msg.data, and the bug is an unguarded `initWallet` in that library - a cross-contract
+#   fact not statically linkable from the proxy (the immutable `lib` has no in-unit type binding).
+#   Flagging "delegatecall forwards msg.data" unconditionally would FP on every legit proxy
+#   (EIP-1167/UUPS), breaking the 0-FP-hard rule. So Parity is not an R7 anchor, NOT mislabeled.
+#   DECIDED (M 04:38): documented NON-FIT for the static layer (honesty > coverage, as Squid was
+#   once a non-fit for R8). The init-hijack class - Parity's unguarded `initWallet` and Audius's
+#   re-callable `initialize` both seize an authority role via a delegatecall/proxy - is a shared
+#   coverage gap. RESOLVED (owner ship decision 2026-11-14): shipped as R12
+#   "unprotected-initializer / init-hijack" (detectors/r12_unprotected_initializer.py), a
+#   single-contract predicate that catches the unguarded-initializer ROOT CAUSE directly (R7 stays
+#   the delegatecall enabler; the two are complementary, not duplicate - see the RULES.md R12
+#   overlap note). Parity is now a wired R12 holdout-vuln below, NOT an R7 anchor; the R7 non-fit stands.
+# R7	detectors/r7_controlled_delegatecall.py	vuln	fixtures/delegatecall-hijack/b-incident/ParityWalletClone.sol	-	Parity (2017) - non-fit for v2 R7 (now wired under R12 below)
+#
+# --- R12 unprotected-initializer / init-hijack (holdout vuln; dev safe = OZTimelock in anchors.tsv) ---
+# Both incidents were authored after the v0.1 freeze (independent holdout). R12 fires on the
+# unguarded authority-installing function in each; it is name-independent (flags initWallet / setup /
+# anything, not the name `initialize`). 0-FP held: R12 is silent on all 193 real-safe files (probe),
+# incl. OZ Initializable/UUPSUpgradeable + the one-shot-guarded OZTimelock dev-safe anchor.
+R12	detectors/r12_unprotected_initializer.py	vuln	fixtures/delegatecall-hijack/b-incident/ParityWalletClone.sol	ParityWalletLibrary	Parity multisig (2017-07-19): initWallet sets `owner` with no re-init guard/modifier/access-control, reachable via the proxy delegatecall fallback -> anyone re-seizes owner, then execute() drains the wallet (holdout vuln; init-hijack root cause, R7 catches the delegatecall enabler and R12 the unguarded initializer)
+R12	detectors/r12_unprotected_initializer.py	vuln	fixtures/upgrade-governance/b-incident/AudiusGovernanceClone.sol	AudiusGovernanceClone	Audius Governance (2022-07-23): initialize installs `controller` with no re-init guard/timelock/guardian on a live proxy -> a single unguarded call seizes governance, then a malicious proposal drains the treasury (holdout vuln; R10/R12 boundary -> R12 pinpoints the authority settable by one unguarded call)
+#
+# --- R11 arbitrary-callee drain of a standing approval (NO holdout anchor yet) ---
+# R11 currently ships with NO holdout row. Each candidate clone in this class is either removed
+# (fabricated) or an honest static-layer non-fit:
+#   1. Provenance (owner policy, M 04:42): the ParaSwap + Anyswap clones were fabricated and
+#      removed from the corpus - not wired, will not exist.
+#   2. Squid (SquidMulticall, 2026-04-07) is a REAL incident but, under variant-B F1 (M 04:53), a
+#      documented NON-FIT for the static layer: SquidMulticall.run is a PURE arbitrary executor
+#      (`calls[i].target.call(callData)`) that holds NO approval of its own - the fact that victims
+#      had approved it is off-contract and not visible in its source. Variant-B F1 fires only when
+#      the contract itself spends a standing approval (a custody signal); a bare executor has none,
+#      exactly like OZ TimelockController (which must stay silent). Widening F1 back to catch Squid
+#      reintroduced FPs on canonical OZ Timelock + Permit2 (A's 78-file probe), so per the pre-agreed
+#      plan we hold 0-FP and accept Squid as a non-fit (cf. the R7 Parity non-fit). 0-FP > recall.
+#   3. Pennysia (PennysiaSettlementClone, executeSwap(venue, raw calldata) -> transferFrom of a
+#      stale approval) is a REAL, verified incident (2026-11-12; track-C manual provenance check,
+#      see its wal PROVENANCE.md) and the class-level replacement for the removed ParaSwap slot. It
+#      was a CANDIDATE R11-class holdout. FIT-CHECK (D, 2026-11-14): the detector was run on
+#      PennysiaSettlementClone.sol under variant B -> 0 findings (does NOT fire). The minimized
+#      clone is a PURE arbitrary executor: `executeSwap(address venue, bytes route)` does
+#      `venue.call(route)` and the draining `transferFrom` lives in the ATTACKER's calldata, not in
+#      the Settlement's own code. So it holds no in-source custody signal (F1-narrow silent) and
+#      makes no literal transferFrom of its own (F2 silent) - structurally identical to Squid.
+#      Verdict: documented static-layer NON-FIT, NOT wired (honesty > coverage, cf. Squid/Parity).
+#      0-FP > recall. (This is the same incident the R3 NB above flags as a Pennysia R11-class
+#      holdout rather than an R3 anchor.)
+# No R11 candidate passes the static fit-check, so R11's live anchor is the DEV F2 case
+# (DrainerKit.drain); R11 ships with no holdout row.
+#
+# NB (R4 holdout non-fit, probed and intentionally NOT wired, to avoid a mislabeled anchor):
+#   - permit-phishing/anyswap-permit-bypass-victim (AnyswapRouterClone) is a permit-validation
+#     BYPASS (router trusts a no-op permit on a token lacking one, then drains a pre-existing
+#     allowance) - it is not "permit consumed beyond the action amount", so R4 does not fit and
+#     it is honestly skipped (per task instruction), not mislabeled.
+#
+# --- R2 set-approval-for-all-to-arbitrary-operator ---
+R2	detectors/r2_set_approval_for_all.py	safe	fixtures/set-approval-for-all/c-safe-impl/SoladyERC721Fixture.sol	-	real Solady ERC721 (MIT) operator/per-token auth; defines setApprovalForAll but never calls it on an arbitrary operator -> R2 silent (holdout safe)
+#
+# --- R8 account-exec-without-allowlist (eip7702-delegation) ---
+R8	detectors/r8_account_exec_without_allowlist.py	vuln	fixtures/eip7702-delegation/b-incident/InfernoBatchDrainerClone.sol	InfernoAccount	Inferno Drainer batched EIP-7702 (Scam Sniffer 2025-05): activate() delegatecalls an attacker-set delegate installed by an un-gated installDelegation, no allow-list -> same shape as the R8 dev anchor VulnerableDelegationAccount.activate (holdout vuln)
+#
+# --- R10 unguarded-upgrade (single-key instant pointer swap) ---
+# Generalization anchor: a create2-metamorphic fixture that structurally exhibits R10's drain
+# surface. MetamorphicProposal declares an address pointer `impl` (R10 _POINTER_EXACT match),
+# a non-constructor `swapCode` writes it, `run()` delegatecalls it (upgrade-shaped), and there
+# is NO timelock/guardian -> R10 FIRE conditions all met. Re-verify when the solc-AST engine lands.
+R10	detectors/r10_unguarded_upgrade.py	vuln	fixtures/create2-metamorphic/b-incident/TornadoGovernanceClone.sol	MetamorphicProposal	Tornado Cash governance 2023-05: impl pointer swapped by a single key (swapCode), no timelock/guardian, delegatecalled on execute (holdout vuln, cross-vector generalization for R10)
+# Real-safe upgrade authorities R10 must stay silent on (governance/guardian/authority gate, not a
+# single owner key). These are genuine c-safe fixtures in baseline-targets; they are wired here so
+# the authority-gate recognizer (not just the block.timestamp timelock) is locked by the benchmark.
+R10	detectors/r10_unguarded_upgrade.py	safe	fixtures/upgrade-governance/c-safe-impl/oz-accessmanager-safe/OZAccessManagedVault.sol	OZAccessManagedVault	real OZ AccessManager: setImplementation defers to IAccessManager.canCall (external authority decision), not an instant single-key swap -> R10 silent (holdout safe)
+R10	detectors/r10_unguarded_upgrade.py	safe	fixtures/upgrade-governance/c-safe-impl/oz-governor-safe/OZGovernorGoverned.sol	GovGovernedVault	setImplementation gated by onlyGovernance (msg.sender == governance, the TimelockController behind the OZ Governor) -> not a single key -> R10 silent (holdout safe)
+R10	detectors/r10_unguarded_upgrade.py	safe	fixtures/upgrade-governance/c-safe-impl/wormhole-initguard-safe/WormholeInitGuardSafe.sol	WormholeInitGuardSafe	submitContractUpgrade gated by onlyGuardian (msg.sender == guardian) on a per-impl init-guarded implementation -> not a settable single key -> R10 silent (holdout safe)
+#
+# NB (new-fixture holdout non-fits, probed and intentionally NOT wired, to avoid mislabeled anchors):
+#   - create2-metamorphic/tornado-governance-victim under R9: R9 fires ONLY when a contract
+#     obtains a code identity (.codehash / codeId) but never enforces it. TornadoGovernanceClone
+#     never references a code identity (it stores and delegatecalls a plain address), so R9
+#     correctly stays silent - exactly R9's documented scope note on the "pure victim without a
+#     code-identity reference". Wiring it under R9 would be a mislabeled FN. Its single-key instant
+#     pointer swap is instead captured by R10 above.
+#   - upgrade-governance/audius-governance-victim under R10: the Audius drain is a re-callable,
+#     unguarded `initialize` that overwrites a `controller` role - NOT a swap of an
+#     implementation/module/delegate pointer. R10 fires on a self-performed swap of a live-logic
+#     pointer; it does not (and should not) fire on an unprotected initializer that writes a
+#     `controller` address (name not in R10's pointer set, no delegatecall of a pointer). The
+#     "unprotected / re-callable initializer" mechanism is now covered by its OWN rule R12
+#     (shipped 2026-11-14, owner decision), so Audius is wired as an R12 holdout-vuln above. Under
+#     R10 it remains an honest skip (different primitive), not a mislabel.
+#   - upgrade-governance/wormhole-uninit-impl-victim under R10/R12: a documented static NON-FIT, NOT
+#     wired. The subject (WormholeCoreImpl) has a re-init-guarded `initialize` (require(!initialized))
+#     and a guardian-gated `submitContractUpgrade` (onlyGuardian), so core R10 (authority-gate) and
+#     core R12 (unprotected-initializer) both correctly stay silent. The real flaw is that the
+#     IMPLEMENTATION was left uninitialized at deploy (init'd via the proxy) - a deploy-time /
+#     cross-contract fact not present in the subject's own guarded source. The syntactic Semgrep R10′
+#     used to flag its guarded swap, but that is the "guarded swap != single-key swap" over-fire the
+#     R10 authority-gate fix removes, so the scan (core-authoritative) now BLOCKs it. 0-FP > one
+#     spurious recall point (cf. the Squid/Parity/Pennysia non-fits; honesty over coverage).
+#
+# --- R13 unvalidated-approve-over-pooled-custody (holdout: Hedgey incident vuln + real OZ SafeERC20 safe) ---
+R13	detectors/r13_unvalidated_approve_custody.py	vuln	fixtures/approve-drainer/b-incident/HedgeyClaimCampaignsClone.sol	HedgeyClaimCampaignsClone	Hedgey Finance (2024-04-19, ~$44.7M): createLockedCampaign pulls a deposit into address(this) then approve(locker, amount) with locker an UNVALIDATED campaign-supplied address; the approval is never revoked on cancel so the residual allowance drains the pooled balance (holdout vuln)
+R13	detectors/r13_unvalidated_approve_custody.py	safe	fixtures/approve-drainer/c-safe-impl/SafeErc20AllowanceFlow.sol	SafeErc20AllowanceFlow	real OZ v5.1.0 SafeERC20.forceApprove wrapper: a STATELESS forwarder (no transferFrom into itself, holds no pooled balance) so there is no custody surface -> R13 silent (holdout safe; same forceApprove-to-param shape as Hedgey but no pool)
+# --- R14 reentrancy / CEI approval-reuse drain (holdout) ---
+R14	detectors/r14_reentrant_approval_reuse.py	vuln	fixtures/set-approval-for-all/b-incident/NftTraderClone.sol	NftTraderClone	NFTTrader.org drain (2023-12-16, ~$3M): closeSwapIntent returns the escrowed NFT with safeTransferFrom (callback) then pulls the wanted NFT reading swap.counterPart from storage; editCounterPart (unguarded, no reentrancy lock) is re-entered mid-callback to set the victim as counterparty -> the standing setApprovalForAll is drained (holdout vuln)
+R14	detectors/r14_reentrant_approval_reuse.py	safe	fixtures/set-approval-for-all/c-safe-impl/SoladyERC721Fixture.sol	SoladyNFTFixture	real Solady ERC721 (MIT) operator-authority token: safeTransferFrom fires the onERC721Received callback (the legal callback R14 must not over-fire on) but performs no post-callback approval-pull from externally-mutable storage -> R14 silent (holdout safe)
+# --- R15 ERC-1271 forged / permissive signer trust (holdout: Lumi/Sodium + Odos incidents, OZ SignatureChecker safe) ---
+R15	detectors/r15_erc1271_forged_signer.py	vuln	fixtures/signature-phishing/b-incident/SodiumAccountClone.sol	SodiumAccountClone	Lumi Finance/Sodium (2026-07-13, ~$270K): a type-0x01 signature names the ERC-1271 signer contract and the account trusts isValidSignature from that attacker-named (caller-supplied) signer -> validation passes with no owner authorization (holdout vuln, axis i)
+R15	detectors/r15_erc1271_forged_signer.py	vuln	fixtures/signature-phishing/b-incident/OdosLimitOrderRouterClone.sol	OdosLimitOrderRouterClone	Odos (2025-01-23, Base, ~$50K): the ERC-6492 counterfactual path low-level-calls a caller-supplied factory+calldata during signature validation then trusts the attacker-named signer -> arbitrary call from the router (holdout vuln, axis iii)
+R15	detectors/r15_erc1271_forged_signer.py	safe	fixtures/signature-phishing/c-safe-impl/OzSignatureCheckerWallet.sol	OzSignatureCheckerWallet	real OZ v5.1.0 SignatureChecker.isValidSignatureNow over an IMMUTABLE signer + EIP-712 typed digest -> the trusted signer is not caller-controlled and the helper checks the magic strictly -> R15 silent (holdout safe)

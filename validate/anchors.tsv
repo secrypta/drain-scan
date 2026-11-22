@@ -1,0 +1,114 @@
+# drain-scan validation anchors: rule <-> labeled wallet-harness fixture.
+# Columns (TAB-separated): rule  detector_module  label(vuln|safe)  path(rel to --wal-root)  note
+# Each rule must FIRE on every vuln anchor and stay SILENT on every safe anchor (0 FP).
+# Paths are in the public wallet-harness repo (read-only source of PoC anchors).
+#
+# --- R1 unbounded-approve-to-arbitrary-spender ---
+R1	detectors/r1_unbounded_approve.py	vuln	src/VulnerableWallet.sol	unbounded approve(spender, type(uint256).max) to an arbitrary spender
+R1	detectors/r1_unbounded_approve.py	safe	src/SafeWallet.sol	bounded exact-amount approve (toy)
+R1	detectors/r1_unbounded_approve.py	safe	fixtures/approve-drainer/c-safe-impl/SafeAllowanceFlow.sol	bounded approve over real OpenZeppelin ERC20 (c-safe)
+#
+# --- R2 set-approval-for-all-to-arbitrary-operator ---
+R2	detectors/r2_set_approval_for_all.py	vuln	src/VulnerableWalletNFT.sol	setApprovalForAll(operator, true) to an arbitrary operator
+R2	detectors/r2_set_approval_for_all.py	safe	src/SafeWalletNFT.sol	scoped approve(operator, tokenId), no setApprovalForAll (toy)
+R2	detectors/r2_set_approval_for_all.py	safe	fixtures/set-approval-for-all/c-safe-impl/SafeOperatorFlow.sol	single-token approve over real OpenZeppelin ERC721 (c-safe)
+#
+# --- R3 lingering-allowance (no reset after action) ---
+R3	detectors/r3_lingering_allowance.py	vuln	src/LingeringAllowanceWallet.sol	approve for action + external use, no reset-to-zero
+R3	detectors/r3_lingering_allowance.py	safe	src/ResetAllowanceWallet.sol	approve + action + approve(spender, 0) reset
+#
+# --- R5 auth-signature-missing-deadline/nonce/domain (replayable) ---
+R5	detectors/r5_signature_missing_binding.py	vuln	src/ReplaySettlement.sol	-	bare-hash verifier: no domain, no nonce, no deadline (replayable)
+R5	detectors/r5_signature_missing_binding.py	safe	src/BoundSettlement.sol	-	EIP-712 domain separator + per-owner nonce + deadline
+#
+# --- R6 ecrecover-over-raw-digest (blind eth_sign / ERC-1271) ---
+R6	detectors/r6_ecrecover_raw_digest.py	vuln	src/BlindSignVector.sol	BlindSigWallet	ecrecover over raw keccak256(abi.encode(...)) digest
+R6	detectors/r6_ecrecover_raw_digest.py	safe	src/BlindSignVector.sol	TypedSigWallet	ecrecover over EIP-712 typed digest (domain-bound)
+#
+# --- R9 trust-in-external-code-without-codehash-pin ---
+R9	detectors/r9_codehash_pin_absence.py	vuln	src/Create2Vector.sol	metamorphic spender exposes code identity (codeId/codehash) but never enforces it
+R9	detectors/r9_codehash_pin_absence.py	safe	fixtures/create2-metamorphic/c-safe-impl/CodehashPinnedVault.sol	pins codeId at trust, re-verifies before every outflow (pin across functions)
+#
+# --- R4 permit/Permit2 consumed beyond the action amount ---
+R4	detectors/r4_permit_beyond_action.py	vuln	src/UnboundedPermitRouter.sol	consumes permit then transferFrom the owner's full balance (beyond the action)
+R4	detectors/r4_permit_beyond_action.py	safe	src/ScopedPermitRouter.sol	consumes permit bounded to exactly the action amount
+R4	detectors/r4_permit_beyond_action.py	safe	fixtures/permit-phishing/c-safe-impl/oz-permit-safe/OZERC20PermitFixture.sol	real OZ ERC20Permit token (defines permit, is not an over-pulling consumer)
+#
+# --- R7 controlled-delegatecall (delegatecall-hijack) ---
+R7	detectors/r7_controlled_delegatecall.py	vuln	src/VulnerableAccount.sol	toy: execTransaction delegatecalls an unguarded `to` param
+R7	detectors/r7_controlled_delegatecall.py	vuln	fixtures/delegatecall-hijack/b-incident/BybitSafeClone.sol	incident: operation-flag flipped to delegatecall (Bybit 2025)
+R7	detectors/r7_controlled_delegatecall.py	safe	src/SafeAccount.sol	toy: delegatecall allow-list guard
+R7	detectors/r7_controlled_delegatecall.py	safe	fixtures/delegatecall-hijack/c-safe-impl/GuardedExecutor.sol	c-safe: canonical allow-listed delegatecall
+
+# --- R8 account-exec-target-without-allowlist (AA / EIP-7702) ---
+R8	detectors/r8_account_exec_without_allowlist.py	vuln	src/CalldataVulnerableWallet.sol	toy: executeByLabel delegatecalls a module param (label trusted)
+R8	detectors/r8_account_exec_without_allowlist.py	vuln	src/DelegationVector.sol	toy: 7702 account activates an un-gated installed delegate
+R8	detectors/r8_account_exec_without_allowlist.py	safe	fixtures/eip7702-delegation/c-safe-impl/AllowlistedDelegatePolicy.sol	c-safe: allow-listed audited delegate only
+R8	detectors/r8_account_exec_without_allowlist.py	safe	fixtures/malicious-calldata/c-safe-impl/SimulatedExecutor.sol	c-safe: net-effect simulation (reverts on hidden drain)
+R8	detectors/r8_account_exec_without_allowlist.py	safe	src/CalldataSafeWallet.sol	toy: net-effect simulation guard
+# R7 must also stay silent on real safe code whose controlled delegatecall is guarded by net-effect simulation (not an allow-list):
+R7	detectors/r7_controlled_delegatecall.py	safe	fixtures/malicious-calldata/c-safe-impl/SimulatedExecutor.sol	c-safe: controlled delegatecall gated by net-effect simulation
+R7	detectors/r7_controlled_delegatecall.py	safe	src/CalldataSafeWallet.sol	toy: controlled delegatecall gated by net-effect simulation
+# Governed upgradeable proxy: execute() delegatecalls `implementation`, but impl is written only via a timelock+guardian path (R10 domain) -> R7 stays silent. Locks the v1 SafeUpgradeWallet FP (flagged 03:38) in the rewrite.
+R7	detectors/r7_controlled_delegatecall.py	safe	src/SafeUpgradeWallet.sol	governed proxy: impl pointer written only via timelock/guardian (0-FP lock)
+#
+# --- R11 arbitrary-callee drain of a standing approval (F1 call / F2 unbound transferFrom) ---
+R11	detectors/r11_arbitrary_callee_drain.py	vuln	fixtures/malicious-calldata/b-incident/DrainerKitModule.sol	DrainerKitModule	incident: drain(victim) transferFrom's a caller-supplied account's full balance via a standing allowance (F2)
+R11	detectors/r11_arbitrary_callee_drain.py	safe	fixtures/malicious-calldata/c-safe-impl/SimulatedExecutor.sol	c-safe: net-effect simulation (reverts on hidden drain)
+R11	detectors/r11_arbitrary_callee_drain.py	safe	src/CalldataSafeWallet.sol	toy: net-effect simulation guard (no arbitrary callee)
+#
+# --- R10 unguarded-upgrade (implementation/module/delegate swap, no timelock/guardian) ---
+R10	detectors/r10_unguarded_upgrade.py	vuln	src/VulnerableUpgradeWallet.sol	toy: instant single-key implementation swap (upgradeTo), no delay/guardian
+R10	detectors/r10_unguarded_upgrade.py	vuln	fixtures/upgrade-governance/b-incident/PaidUpgradeClone.sol	incident: PAID Network unguarded single-key proxy upgrade (2021-03-05)
+R10	detectors/r10_unguarded_upgrade.py	safe	fixtures/upgrade-governance/c-safe-impl/oz-timelock-safe/OZTimelockUUPSWallet.sol	c-safe: real OZ UUPS whose upgrade authority is an external TimelockController
+R10	detectors/r10_unguarded_upgrade.py	safe	src/SafeUpgradeWallet.sol	toy: two-step timelock (propose/apply after delay) + guardian cancel
+#
+# ================= Semgrep engine anchors (B) =================
+# The 3 syntactic rules Semgrep ships at 0-FP (see docs/engine-split.md): R2' / R6' / R10'.
+# Primed ids (R2'/R6'/R10') keep the Semgrep variant a SEPARATE per-rule line from the
+# Slither rules of the same vector (R2, R6), so all.sh reports each engine's P/R on its own
+# and the R2/R2' agreement is visible as a cross-check. detector_module=semgrep/<file>.yaml
+# is dispatched to the Semgrep engine by the driver (extension-based).
+#
+# --- R2' set-approval-for-all (Semgrep syntactic cross-check to Slither R2) ---
+R2'	semgrep/R2-set-approval-for-all-arbitrary-operator.yaml	vuln	src/VulnerableWalletNFT.sol	setApprovalForAll(operator, true) to a non-literal operator
+R2'	semgrep/R2-set-approval-for-all-arbitrary-operator.yaml	safe	src/SafeWalletNFT.sol	scoped per-token approve, no setApprovalForAll (toy)
+R2'	semgrep/R2-set-approval-for-all-arbitrary-operator.yaml	safe	fixtures/set-approval-for-all/c-safe-impl/SafeOperatorFlow.sol	single-token approve over real OpenZeppelin ERC721 (c-safe)
+#
+# --- R6' ecrecover-over-raw-digest (Semgrep syntactic; mirrors Slither R6 per-contract) ---
+R6'	semgrep/R6-ecrecover-raw-digest.yaml	vuln	src/BlindSignVector.sol	BlindSigWallet	ecrecover over raw keccak256(abi.encode(...)) digest (blind-sign)
+R6'	semgrep/R6-ecrecover-raw-digest.yaml	safe	src/BlindSignVector.sol	TypedSigWallet	ecrecover over EIP-712 typed digest (domain-bound)
+R6'	semgrep/R6-ecrecover-raw-digest.yaml	safe	fixtures/blind-eth-sign/c-safe-impl/ClearSigningWallet.sol	real clear-signing wallet, EIP-712 digest (c-safe)
+#
+# --- R10' implementation-swap-without-timelock (Semgrep syntactic) ---
+R10'	semgrep/R10-upgrade-without-timelock.yaml	vuln	src/VulnerableUpgradeWallet.sol	instant single-key implementation swap, no timelock/delay guard
+R10'	semgrep/R10-upgrade-without-timelock.yaml	safe	src/SafeUpgradeWallet.sol	swap gated behind a block.timestamp delay (timelock)
+R10'	semgrep/R10-upgrade-without-timelock.yaml	safe	fixtures/upgrade-governance/c-safe-impl/oz-timelock-safe/OZTimelockUUPSWallet.sol	real OZ TimelockController + UUPS-gated upgrade (c-safe)
+#
+# --- R12 unprotected-initializer / init-hijack (dev safe; vuln anchors are HOLDOUT Parity/Audius) ---
+R12	detectors/r12_unprotected_initializer.py	safe	fixtures/upgrade-governance/c-safe-impl/oz-timelock-safe/OZTimelockUUPSWallet.sol	one-shot-guarded initializer (require(!_initialized) then set) that installs the upgrade authority; real OZ v5.1.0 UUPS c-safe -> R12 silent (P2 one-shot guard)
+#
+# --- R13 unvalidated-approve-over-pooled-custody (approve-drainer; Hedgey-class; added by track B) ---
+R13	detectors/r13_unvalidated_approve_custody.py	vuln	src/PooledCustodyApproveWallet.sol	toy: pooled-custody contract approves a caller-supplied spender (bounded amount) with no allow-list/msg.sender gate -> residual allowance drains the pool (distinct from R1 unbounded)
+R13	detectors/r13_unvalidated_approve_custody.py	safe	src/GuardedCustodyApproveWallet.sol	toy: same pooled custody but the caller-supplied spender must pass an owner-curated address allow-list + revert -> R13 silent
+# --- R14 reentrancy / CEI approval-reuse drain (dev toy pair; holdout vuln is NFTTrader) ---
+R14	detectors/r14_reentrant_approval_reuse.py	vuln	src/ReentrantSwapToy.sol	ReentrantSwapWallet	toy: counterparty re-read from storage after a safeTransferFrom callback; editCounterPart (separate unguarded entrypoint) redirects the pulled-from party mid-callback -> CEI-violation drain, R14 fires
+R14	detectors/r14_reentrant_approval_reuse.py	safe	src/ReentrantSwapToy.sol	CeiCorrectSwapWallet	toy: same shape but all terms cached in locals BEFORE the callback; the pull reads the cached counterparty, not storage -> R14 silent (CEI-correct)
+# --- R15 ERC-1271 forged / permissive signer trust (dev toy; holdout = Lumi/Sodium + Odos incidents) ---
+R15	detectors/r15_erc1271_forged_signer.py	vuln	src/Erc1271TrustToy.sol	PermissiveSignerWallet	toy (axis i): the trusted ERC-1271 signer is a caller-supplied parameter, so an attacker names their own permissive contract -> R15 fires (the strict magic check is present and does not help)
+R15	detectors/r15_erc1271_forged_signer.py	vuln	src/Erc1271TrustToy.sol	LooseResultWallet	toy (axis ii): fixed signer but authorizes on bare staticcall success, never checking the returned value equals the ERC-1271 magic -> R15 fires
+R15	detectors/r15_erc1271_forged_signer.py	safe	src/Erc1271TrustToy.sol	StrictSignerWallet	toy: immutable signer AND strict == MAGIC check -> R15 silent
+R7	detectors/r7_controlled_delegatecall.py	vuln	src/AssemblyDelegateAccount.sol	toy: delegatecall-hijack in inline-assembly (Yul) form, unguarded `to` param
+R7	detectors/r7_controlled_delegatecall.py	safe	src/AssemblyDelegateSafeAccount.sol	toy: caller-gated (onlyOwner) assembly delegate-execute (Solady delegateExecute model)
+R8	detectors/r8_account_exec_without_allowlist.py	vuln	src/AssemblyDelegateAccount.sol	toy: AA assembly-form delegatecall to a calldata target, no allow-list
+R8	detectors/r8_account_exec_without_allowlist.py	safe	src/AssemblyDelegateSafeAccount.sol	toy: caller-gated assembly delegate-execute (trusted-owner AA primitive)
+# --- real-form library-shape anchors (wal A, 2026-11-21): SafeERC20/TransferHelper static + using-for ---
+# Exercise the committed gate on the library call shapes real victims use (member-only scan was blind).
+R1	detectors/r1_unbounded_approve.py	vuln	src/R1SafeErc20FormWallet.sol	R1SafeErc20FormWallet	real-form: unbounded approve(max) to arbitrary spender via SafeERC20 static safeApprove/safeIncreaseAllowance + using-for -> R1 fires
+R1	detectors/r1_unbounded_approve.py	safe	src/R1SafeErc20FormSafe.sol	R1SafeErc20FormSafe	real-form: bounded amounts + max-to-fixed-literal via SafeERC20 forms -> R1 silent (0-FP)
+R3	detectors/r3_lingering_allowance.py	vuln	src/R3SafeErc20FormWallet.sol	R3SafeErc20FormWallet	real-form: safeIncreaseAllowance + action use + no reset (library form) -> R3 fires
+R3	detectors/r3_lingering_allowance.py	safe	src/R3SafeErc20FormSafe.sol	R3SafeErc20FormSafe	real-form: same + forceApprove(.,0) reset-to-zero -> R3 silent (0-FP)
+R4	detectors/r4_permit_beyond_action.py	vuln	src/R4SafeTransferFromRouter.sol	R4SafeTransferFromRouter	real-form: permit + full-balance pull via SafeERC20 static safeTransferFrom sink -> R4 fires
+R4	detectors/r4_permit_beyond_action.py	safe	src/R4SafeTransferFromScoped.sol	R4SafeTransferFromScoped	real-form: permit + bounded safeTransferFrom (exact action amount) -> R4 silent (0-FP)
+R7	detectors/r7_controlled_delegatecall.py	vuln	src/AssemblyDelegateLoggingAccount.sol	toy: asm delegatecall that only LOGS msg.sender (bare mention is not a caller gate - F2 FN proof)
+R8	detectors/r8_account_exec_without_allowlist.py	vuln	src/AssemblyDelegateLoggingAccount.sol	toy: asm delegate-exec logging msg.sender, no auth gate (F2 FN proof)

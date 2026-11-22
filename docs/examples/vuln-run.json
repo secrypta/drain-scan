@@ -1,0 +1,40 @@
+// drain-scan - example run on a known-VULNERABLE contract, JSON output.
+// The lines below the header (starting at the first '{') are the VERBATIM tool
+// output; strip these // header lines to get strict JSON.
+//
+// Target : BybitSafeClone - Bybit 2025 delegatecall hijack, incident fixture (b).
+// Command: ./scan fixtures/delegatecall-hijack/b-incident/BybitSafeClone.sol --allow-paths . --format json
+// Engine : drain-scan analysis core (solc AST, no Slither)
+// solc   : 0.8.24+commit.e11b9ed9
+// drain-scan: e4d1355   wallet-harness: 24ded72   date: 2026-11-21
+// Exit   : 1  (findings reported; top-level "rating" = highest fired severity)
+// Note   : "rating" is a drain-risk rating (this tool's scope), not a general audit.
+{
+  "path": "fixtures/delegatecall-hijack/b-incident/BybitSafeClone.sol",
+  "rating": "HIGH",
+  "findings": [
+    {
+      "rule_id": "R7",
+      "vector": "delegatecall-hijack",
+      "severity": "high",
+      "engine": "core",
+      "location": "fixtures/delegatecall-hijack/b-incident/BybitSafeClone.sol:49:BybitSafeClone.execTransaction",
+      "message": "delegatecall to a mutable / attacker-settable target (own-code AST; governed-proxy suppressed)",
+      "poc_fixture": "src/VulnerableAccount.sol",
+      "fix": "docs/delegation-cluster.md"
+    },
+    {
+      "rule_id": "R8",
+      "vector": "eip7702-delegation",
+      "severity": "high",
+      "engine": "core",
+      "location": "fixtures/delegatecall-hijack/b-incident/BybitSafeClone.sol:49:BybitSafeClone.execTransaction",
+      "message": "account forwards delegate execution to a calldata-supplied target with no allow-list",
+      "poc_fixture": "src/CalldataVulnerableWallet.sol",
+      "fix": "docs/delegation-cluster.md"
+    }
+  ],
+  "count": 2,
+  "skipped": [],
+  "skipped_count": 0
+}

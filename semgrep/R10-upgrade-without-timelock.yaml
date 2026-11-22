@@ -1,0 +1,44 @@
+rules:
+  - id: implementation-swap-without-timelock
+    languages: [solidity]
+    severity: ERROR
+    message: >-
+      A function swaps the wallet's implementation/module/logic slot directly
+      (e.g. `implementation = newImplementation`) with no timelock/delay check in its body.
+      If a single key can call this, one compromised key = instant malicious upgrade = full
+      drain. Gate the swap behind a timelock (two-step propose -> delay -> apply, e.g. an
+      OpenZeppelin TimelockController) and/or a guardian, so an instant single-key swap is
+      impossible. (R10' - syntactic; the core R10 detector proves the single-key + no-guardian condition.)
+    metadata:
+      drain-scan-rule: R10prime
+      vector: upgrade-governance
+      engine: semgrep
+      confidence: MEDIUM
+      references:
+        - https://github.com/secrypta/wallet-harness
+    patterns:
+      # A function body that assigns an implementation/module/logic-like state slot. (`delegate`
+      # is intentionally excluded - an EIP-7702/AA delegate pointer is R8's domain, not an upgrade slot.)
+      - pattern: |
+          function $F(...) external {
+            ...
+            $SLOT = $NEW;
+            ...
+          }
+      - metavariable-regex:
+          metavariable: $SLOT
+          regex: (?i)^(implementation|_implementation|impl|module|_module|logic|_logic)$
+      # Not flagged if the same function gates the swap behind a timestamp/delay check
+      # (a timelock), i.e. the swap is not instant.
+      - pattern-not: |
+          function $F(...) external {
+            ...
+            require(block.timestamp >= $AFTER, ...);
+            ...
+          }
+      - pattern-not: |
+          function $F(...) external {
+            ...
+            if (block.timestamp < $AFTER) revert $E();
+            ...
+          }

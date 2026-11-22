@@ -1,0 +1,32 @@
+# drain-scan - example run on a known-VULNERABLE contract (findings, exit 1)
+#
+# Target : BybitSafeClone - minimized offline reproduction of the Bybit 2025
+#          delegatecall hijack (Safe execTransaction forced into delegatecall to
+#          an attacker-settable target). Incident-level fixture, tier (b).
+# Command: ./scan fixtures/delegatecall-hijack/b-incident/BybitSafeClone.sol --allow-paths .
+#          (run from the wallet-harness corpus root. WAL_ROOT = that checkout.)
+# Engine : drain-scan analysis core (solc AST, no Slither)
+# solc   : 0.8.24+commit.e11b9ed9
+# drain-scan: e4d1355   wallet-harness: 24ded72   date: 2026-11-21
+# Exit   : 1  (findings reported - RATING: HIGH; R7 controlled-delegatecall + R8 exec-without-allowlist)
+# Note   : RATING = highest severity among fired rules (from rules.tsv). Drain-risk
+#          scope, not a general audit.
+# ---------------------------- verbatim output ----------------------------
+RATING: HIGH   (drain-risk - this scanner's scope, not a general audit)
+
+drain-scan - 2 finding(s) in fixtures/delegatecall-hijack/b-incident/BybitSafeClone.sol
+
+== delegatecall-hijack ==
+  [R7] HIGH        core  fixtures/delegatecall-hijack/b-incident/BybitSafeClone.sol:49:BybitSafeClone.execTransaction
+       delegatecall to a mutable / attacker-settable target (own-code AST; governed-proxy suppressed)
+       PoC : src/VulnerableAccount.sol
+       fix : docs/delegation-cluster.md
+
+== eip7702-delegation ==
+  [R8] HIGH        core  fixtures/delegatecall-hijack/b-incident/BybitSafeClone.sol:49:BybitSafeClone.execTransaction
+       account forwards delegate execution to a calldata-supplied target with no allow-list
+       PoC : src/CalldataVulnerableWallet.sol
+       fix : docs/delegation-cluster.md
+
+summary: 2 finding(s)  [high=2]
+[exit code: 1]

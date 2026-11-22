@@ -1,0 +1,97 @@
+# drain-scan reproducibility CI.
+#
+# Proves, on every push / PR, that the scanner's headline claims hold from a clean machine:
+#   * 0 false positives on the real vendored safe corpus (validate/zero_fp_probe.sh), and
+#   * precision = recall = 1.0 on the labeled DEV + HOLDOUT anchors (validate/all.sh),
+# plus a smoke test that the ./scan CLI reports findings on a known-vulnerable fixture
+# (exit 1) and stays silent on a known-safe one (exit 0).
+#
+# Toolchain is exactly what requirements.txt + validate/README.md describe: a venv with
+# solc-select + semgrep and the two pinned solc compilers (0.8.24 for most fixtures, 0.8.17
+# for Uniswap Permit2). The analysis engine is drain-scan's own core over the solc AST - NO
+# Slither / crytic-compile (deliberately: Slither is AGPL, this repo is MIT), so the only
+# third-party toolchain here is solc + Semgrep.
+#
+# The labeled corpus lives in the PUBLIC wallet-harness repo and is checked out as WAL_ROOT;
+# override the repo/ref below if it is mirrored elsewhere. No private data is referenced.
+
+name: validate
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # Public labeled fixture corpus (wallet-harness). Checked out as $WAL_ROOT.
+  WAL_CORPUS_REPO: secrypta/wallet-harness
+  WAL_CORPUS_REF: main
+  # Pinned compilers (core/compile.py picks per file by pragma).
+  SOLC_PRIMARY: "0.8.24"
+  SOLC_PERMIT2: "0.8.17"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out drain-scan
+        uses: actions/checkout@v4
+
+      - name: Check out wallet-harness corpus (public)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.WAL_CORPUS_REPO }}
+          ref: ${{ env.WAL_CORPUS_REF }}
+          path: wallet-harness
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Create venv and install toolchain
+        run: |
+          python3 -m venv .venv
+          . .venv/bin/activate
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Install pinned solc compilers
+        run: |
+          . .venv/bin/activate
+          solc-select install "$SOLC_PRIMARY"
+          solc-select install "$SOLC_PERMIT2"
+          solc-select use "$SOLC_PRIMARY"
+
+      - name: 0-FP probe (precision on real, unseen safe code)
+        run: |
+          WAL_ROOT="$GITHUB_WORKSPACE/wallet-harness" validate/zero_fp_probe.sh
+
+      - name: Benchmark (per-rule + overall precision/recall/F1)
+        run: |
+          # STRICT_HOLDOUT=1 => the run also fails if the HOLDOUT split is not p/r=1.0,
+          # not only DEV. Both must be perfect for the build to pass.
+          WAL_ROOT="$GITHUB_WORKSPACE/wallet-harness" STRICT_HOLDOUT=1 validate/all.sh
+
+      - name: Smoke the ./scan CLI (vuln -> exit 1, safe -> exit 0)
+        run: |
+          set -euo pipefail
+          . .venv/bin/activate
+          cd "$GITHUB_WORKSPACE/wallet-harness"
+          SCAN="$GITHUB_WORKSPACE/scan"
+          vuln="fixtures/delegatecall-hijack/b-incident/BybitSafeClone.sol"
+          safe="fixtures/vendor/solady-accounts/accounts/ERC4337.sol"
+
+          # Known-vulnerable fixture: must report findings and exit non-zero.
+          if "$SCAN" "$vuln" --allow-paths . ; then
+            echo "::error::scan on $vuln exited 0; expected findings (exit 1)"
+            exit 1
+          fi
+          echo "ok: scan flagged the vulnerable fixture (non-zero exit)"
+
+          # Known-safe fixture: must be clean and exit zero (set -e catches a non-zero exit).
+          "$SCAN" "$safe" --allow-paths .
+          echo "ok: scan stayed silent on the safe fixture (exit 0)"

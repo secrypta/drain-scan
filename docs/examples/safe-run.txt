@@ -1,0 +1,21 @@
+# drain-scan - example run on a known-SAFE contract (clean report, exit 0)
+#
+# Target : Solady ERC-4337 account - a canonical smart-wallet implementation,
+#          MIT, vendored byte-identical (fixtures/vendor/solady-accounts/).
+# Command: ./scan fixtures/vendor/solady-accounts/accounts/ERC4337.sol --allow-paths .
+#          (run from the wallet-harness corpus root; --allow-paths resolves the
+#           vendored import closure. WAL_ROOT = that checkout.)
+# Engine : drain-scan analysis core (solc AST, no Slither)
+# solc   : 0.8.24+commit.e11b9ed9
+# drain-scan: e4d1355   wallet-harness: 24ded72   date: 2026-11-21
+# Exit   : 0  (no findings - RATING: CLEAN, no drain surface flagged)
+# Note   : RATING is a drain-risk rating within this tool's scope, not a general
+#          audit; CLEAN != "safe overall".
+# ---------------------------- verbatim output ----------------------------
+RATING: CLEAN   (no drain surface flagged - not a general safety guarantee)
+
+drain-scan - 0 finding(s) in fixtures/vendor/solady-accounts/accounts/ERC4337.sol
+
+  no drain surfaces flagged by the current rule set.
+  (note: a clean scan is not a security guarantee - see RULES.md scope.)
+[exit code: 0]

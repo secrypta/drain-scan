@@ -1,0 +1,27 @@
+rules:
+  - id: set-approval-for-all-arbitrary-operator
+    languages: [solidity]
+    severity: ERROR
+    message: >-
+      Blanket `setApprovalForAll(operator, true)` grants the operator standing authority
+      over the wallet's ENTIRE token collection (present and future). When `operator` is not
+      a compile-time constant / allowlisted address, a compromised or malicious operator can
+      sweep every token. Prefer scoped per-token `approve(operator, tokenId)`; if blanket
+      approval is unavoidable, restrict `operator` to an immutable/allowlisted address.
+      (R2 - syntactic cross-check to the core R2 detector, which additionally proves the operator
+      is not immutable/allowlisted.)
+    metadata:
+      drain-scan-rule: R2
+      vector: set-approval-for-all
+      engine: semgrep
+      confidence: MEDIUM
+      references:
+        - https://github.com/secrypta/wallet-harness
+    patterns:
+      - pattern: $TOKEN.setApprovalForAll($OP, true)
+      # Do not flag an approval whose operator is a literal 20-byte address constant: a
+      # hard-coded operator is not "arbitrary". (Full immutable/allowlisted discrimination
+      # is the core R2 detector's job; this syntactic rule only drops obvious address literals.)
+      - metavariable-regex:
+          metavariable: $OP
+          regex: ^(?!0x[0-9a-fA-F]{40}$).*
