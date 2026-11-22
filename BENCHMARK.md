@@ -8,7 +8,7 @@ coverage boundary shown, not hidden.
 
 > **This is the static linter's score, which is not the headline number.** drain-bench's own
 > `wal` row (a **dynamic** Foundry exploit/control harness) scores 1.0 because it *runs* each
-> drain; drain-scan is a **static** linter and is deliberately narrow and precision-first. Read
+> drain with that fixture's own test - a corpus self-consistency check, not a blind detector; drain-scan is a **static** linter and is deliberately narrow and precision-first. Read
 > this as "how far does a 0-FP static linter get on the full drain surface", not as a claim to
 > beat the harness or general tools on recall.
 
@@ -22,8 +22,10 @@ imports resolve), and its verdict is set by the **same rule the baselines use**
 whose source line falls within the subject contract's line span; otherwise **BLOCKED**; a
 compile/scan error that yields no output is **no verdict -> MISS** (a coverage gap we never guess).
 Verdicts are scored with `bench/score.sh` against the dataset manifest's `label`, split into
-**dev** (the fixtures the rules were written against) and the independent **holdout** (fixtures
-added after the `v0.1` freeze, covering all 13 vectors).
+**dev** (the fixtures the rules were written against) and the **holdout** (fixtures added after the
+`v0.1` freeze, covering all 13 vectors). The holdout is not blind for drain-scan: R11-R15 and the
+R10/R13 false-positive fixes were developed while it was visible, and some holdout fixtures are rule
+anchors (`validate/anchors.holdout.tsv`).
 
 Reproduce (read-only against a `wallet-harness` checkout at `$WAL_ROOT`): run `scan` over each
 `baseline-targets.tsv` subject, emit `[<vector>] target=<t> verdict=<V|BLOCKED>`, then
@@ -61,7 +63,10 @@ The self-authored real-form coverage toys (R1/R3/R4 library shapes, inline-assem
 exercise drain-scan's own detectors would be self-selecting; they live in drain-scan's `validate/`
 anchors (all.sh), not the neutral comparison corpus.
 
-### Holdout (the independent, non-tuned split - 94 fixtures: 41 vuln / 53 safe)
+### Holdout (the post-freeze split - 94 fixtures: 41 vuln / 53 safe)
+
+Independent ground truth for the general tools (none was built on this corpus). Not blind for
+drain-scan (see *Method*) or for the `wal` row (self-consistency, see the note at the top).
 
 | tool | TP | FP | FN | TN | precision | recall | F1 |
 |------|----|----|----|----|-----------|--------|-----|
@@ -79,8 +84,8 @@ anchors (all.sh), not the neutral comparison corpus.
 - **Precision, not recall, is drain-scan's story.** drain-scan's precision is **1.000 on both
   splits** - zero false positives across all 155 labeled fixtures - while every general static tool
   sits near 0.60 on the full split (they flag safe OZ/Solady code for generic reasons). That 1.0
-  holds on the **holdout** too (fixtures it was never tuned to): the 0-FP discipline on independent
-  code. (Reaching it took a real correctness fix, not a suppression - see below.)
+  holds on the **holdout** too: the 0-FP discipline on separately sourced code (not blind code -
+  some false-positive fixes were made with the holdout visible, see below). (Reaching it took a real correctness fix, not a suppression - see below.)
 - **Its recall is deliberately narrow and *below* the general tools on this corpus.** drain-scan
   holdout recall is 0.450 vs Wake 0.700 / Mythril 0.711. This is by design: drain-scan fires only
   on 15 specific, code-decidable wallet-drain surfaces (unbounded approval / operator grant,

@@ -50,8 +50,10 @@ Every rule is anchored to a **real, publicly-documented drain** and proven not t
 Each entry is a minimized, offline **MIT reproduction** of a public incident (no third-party code
 copied). The provenance - transaction / amount / date - is recorded **verbatim** in each fixture's
 `PROVENANCE.md` in the [`wallet-harness`](https://github.com/secrypta/wallet-harness) corpus. The
-**holdout** incidents were authored *after* the harness froze and were never used to write a rule,
-so a hit there measures generalization (recall on code the rule never saw), not memorization.
+**holdout** incidents were added *after* the harness interface froze (`v0.1`), but they were not
+hidden from rule authors: R11-R15 and several false-positive fixes were written while the holdout
+was in the repo, and some holdout fixtures are rule anchors. Read a holdout hit as recall on a
+separately sourced fixture, not as recall on code no rule author ever saw.
 
 | Incident | Date | Reported loss | Drain mechanism | Split |
 |---|---|---|---|---|
@@ -106,7 +108,7 @@ Headline figures (one authoritative run, rules R1-R15):
 | Split | Labeled fixtures | TP | FP | FN | TN | MISS | Precision | Recall | F1 |
 |---|---|---|---|---|---|---|---|---|---|
 | all (dev + holdout) | 155 | 35 | **0** | 33 | 83 | 4 | **1.000** | 0.515 | 0.680 |
-| holdout (independent) | 94 | 18 | **0** | 22 | 52 | 2 | **1.000** | 0.450 | 0.621 |
+| holdout (post-freeze) | 94 | 18 | **0** | 22 | 52 | 2 | **1.000** | 0.450 | 0.621 |
 
 **Precision 1.0 is a design constraint, not an outcome.** 0 false positives on the labeled safe
 corpus is a hard ship requirement, held *above* recall. Recall is deliberately narrow: drain-scan
@@ -118,7 +120,8 @@ is. It is the precision-first **static** companion to the full-coverage dynamic 
 > every rule fires on its own labeled vuln anchor and stays silent on its safe anchor: **DEV** 35
 > fixtures / 53 rule-anchor evals and **HOLDOUT** 18 / 22, all at precision/recall/F1 = 1.000. This
 > is a **tuned** gate (each rule catches the fixtures it was authored against) - **not** an
-> independent recall figure; the independent measure is the holdout row above. The benchmark is
+> independent recall figure; the benchmark rows above are the broader measure (the holdout row is a
+> separately sourced split, not a blind one). The benchmark is
 > small and hand-built; a clean scan is **not** a security guarantee (see *Scope & honesty*).
 
 ## Engines

@@ -167,9 +167,10 @@ Legend: **✓** = a dev vuln+safe pair, anchored and asserted by `validate/all.s
 So holdout **vuln** anchors exist for R5, R6, R8, R10, R12, R13, R14, R15; R1/R2/R3 carry holdout *safe*
 anchors only; R4, R7, R9, R11 are dev-anchored with the holdout-class incident documented as a non-fit
 above. **R12 is the inverse shape**: both its real-incident vuln clones (Parity, Audius) are
-*independent holdout* (authored after the v0.1 freeze), and its 0-FP is asserted by a dev *safe*
+*holdout* fixtures (authored after the v0.1 freeze, but known to the rule author - not blind),
+and its 0-FP is asserted by a dev *safe*
 anchor (the one-shot-guarded OZ Timelock) plus silence across all 193 real-safe files - so R12 has
-no toy dev *vuln*, by design, since its vulnerable cases are the independent incidents themselves.
+no toy dev *vuln*, by design, since its vulnerable cases are the real incidents themselves.
 
 Notes:
 - R7's primitive (a `delegatecall` whose destination is attacker-settable) is a well-known
