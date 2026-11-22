@@ -1,6 +1,6 @@
 # drain-scan
 
-> **Working name.** Final public name set at publication. Narrow by design.
+> Narrow by design.
 
 A **static linter for drain surfaces in smart-contract wallets and accounts** - smart
 wallets, ERC-4337 (account-abstraction) accounts, EIP-7702 delegates, and multisigs. It
