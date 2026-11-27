@@ -15,8 +15,7 @@
 # The labeled corpus lives in the PUBLIC wallet-harness repo and is checked out as WAL_ROOT;
 # override the repo/ref below if it is mirrored elsewhere. No private data is referenced.
 
-name: validate
-
+name: CI
 on:
   push:
   pull_request:
