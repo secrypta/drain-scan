@@ -1,5 +1,7 @@
 # drain-scan
 
+[![validate](https://github.com/secrypta/drain-scan/actions/workflows/validate.yml/badge.svg)](https://github.com/secrypta/drain-scan/actions/workflows/validate.yml)
+
 > Narrow by design.
 
 A **static linter for drain surfaces in smart-contract wallets and accounts** - smart
